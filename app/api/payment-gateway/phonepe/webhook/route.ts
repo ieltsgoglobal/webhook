@@ -47,31 +47,48 @@ export async function POST(req: NextRequest) {
 
         let orgId: string | undefined;
         let usersPurchased: number | undefined;
+        let TYPE: "B2B_CREDIT_PACKAGE" | "B2C_MEMBERSHIP";
 
         try {
             const parsed = JSON.parse(metaInfo?.udf1 || "{}");
             orgId = parsed.orgId;
             usersPurchased = parseInt(parsed.usersPurchased);
+            TYPE = parsed.TYPE;
         } catch {
             return new Response("Invalid metaInfo", { status: 400 });
         }
 
-        if (!orgId || !usersPurchased) {
-            return new Response("Missing metaInfo", { status: 400 });
+        if (!TYPE) {
+            return new Response("Missing TYPE in metaInfo", { status: 400 });
         }
 
         // ------------------------------------------------------------
 
 
+        switch (TYPE) {
+            case "B2B_CREDIT_PACKAGE": {
+                if (!orgId || !usersPurchased) {
+                    return new Response("Missing metaInfo for B2B_CREDIT_PACKAGE", { status: 400 });
+                }
 
-        // Add credits + transaction
-        const result = await addTransactionAndCredits(orgId, usersPurchased, amount / 100);
+                const result = await addTransactionAndCredits(orgId, usersPurchased, amount / 100);
 
-        if ("error" in result) {
-            return new Response("Failed to update credits", { status: 500 });
+                if ("error" in result) {
+                    return new Response("Failed to update credits", { status: 500 });
+                }
+
+                return NextResponse.json({ success: true, handled: TYPE });
+            }
+
+            case "B2C_MEMBERSHIP": {
+                console.log("Received B2C_MEMBERSHIP payment");
+                return NextResponse.json({ success: true, handled: TYPE });
+            }
+
+            default:
+                return new Response(`Unknown TYPE: ${TYPE}`, { status: 400 });
         }
 
-        return NextResponse.json({ success: true });
     } catch (err) {
         return new Response("Invalid webhook signature", { status: 401 });
     }

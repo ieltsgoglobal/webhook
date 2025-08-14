@@ -1,5 +1,6 @@
 // File: app/api/payment-gateway/phonepe/webhook/route.ts
 import { addTransactionAndCredits } from "@/lib/supabase/transaction-table";
+import { updateUserMembership } from "@/lib/supabase/user-table";
 import { NextRequest, NextResponse } from "next/server";
 import { StandardCheckoutClient, Env } from "pg-sdk-node";
 
@@ -47,13 +48,17 @@ export async function POST(req: NextRequest) {
 
         let orgId: string | undefined;
         let usersPurchased: number | undefined;
-        let TYPE: "B2B_CREDIT_PACKAGE" | "B2C_MEMBERSHIP";
+        let TYPE: "B2B_CREDIT_PACKAGE" | "B2C_V1_FIXED";
+        let userId: string | undefined
+        let duration: number
 
         try {
             const parsed = JSON.parse(metaInfo?.udf1 || "{}");
             orgId = parsed.orgId;
             usersPurchased = parseInt(parsed.usersPurchased);
             TYPE = parsed.TYPE;
+            userId = parsed.userId
+            duration = parsed.duration
         } catch {
             return new Response("Invalid metaInfo", { status: 400 });
         }
@@ -80,8 +85,19 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ success: true, handled: TYPE });
             }
 
-            case "B2C_MEMBERSHIP": {
-                console.log("Received B2C_MEMBERSHIP payment");
+            case "B2C_V1_FIXED": {
+                if (!userId || !duration) {
+                    return new Response("Missing userId or duration", { status: 400 });
+                }
+
+                await updateUserMembership({
+                    userId,
+                    membership_type: "B2C_V1_FIXED",
+                    durationInDays: duration,
+                    paymentAmount: amount / 100,
+                    paymentDate: new Date(),
+                });
+
                 return NextResponse.json({ success: true, handled: TYPE });
             }
 
